@@ -17,11 +17,18 @@ func main() {
 	fmt.Println("Listening on port 4221")
 
 	// Accept a connection and handle it
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting:", err.Error())
-		return
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting:", err.Error())
+			return
+		}
+		go handleConn(conn)
+
 	}
+}
+
+func handleConn(conn net.Conn) {
 	defer conn.Close()
 
 	// Read from the connection
@@ -49,7 +56,6 @@ func main() {
 		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
 		conn.Write([]byte(responce))
 	} else if path == "/user-agent" {
-		fmt.Println(userAgent)
 		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(userAgent), userAgent)
 		conn.Write([]byte(responce))
 	} else if path == "/" {
