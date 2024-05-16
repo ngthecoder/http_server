@@ -35,10 +35,28 @@ func main() {
 	lines := strings.Split(req, "\r\n")
 	reqLine := strings.Split(lines[0], " ")
 	path := reqLine[1]
+	userAgent := "User-Agent not found"
+	for _, line := range lines {
+		if strings.HasPrefix(line, "User-Agent:") {
+			userAgent = strings.TrimSpace(strings.TrimPrefix(line, "User-Agent:"))
+			break
+		}
+	}
 
 	// Write to the connection
-	if path == "/" {
+	if strings.HasPrefix(path, "/echo") {
+		message := strings.TrimPrefix(path, "/echo/")
+		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
+		conn.Write([]byte(responce))
+	} else if path == "/user-agent" {
+		fmt.Println(userAgent)
+		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(userAgent), userAgent)
+		conn.Write([]byte(responce))
+	} else if path == "/" {
 		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("Hello World"), "Hello World")
+		conn.Write([]byte(responce))
+	} else {
+		responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
 		conn.Write([]byte(responce))
 	}
 }
