@@ -23,6 +23,10 @@ The server supports concurrent client connections, enabling it to handle multipl
 ### Files Endpoint
 The /files/{filename} endpoint finds and returns up to 1014 bytes of the contents of the file in the responce body from the direcotry provided with --directory flag.
 
+The serveFile function handles GET requests to serve files from the specified directory. If the file is found, it returns the file contents with a 200 OK status. If the file is not found, it returns a 404 Not Found status. If there is an internal server error, it returns a 500 Internal Server Error status. The function reads and returns up to 1024 bytes of the file content.
+
+The saveFile function handles POST requests to save the request body as a file in the specified directory. If the file is successfully saved, it returns a 200 OK status with a message indicating the file was saved. If there is an error creating or writing to the file, it returns a 500 Internal Server Error status.
+
 ## Running the Server
 To run the server, use the following command:
 ```
