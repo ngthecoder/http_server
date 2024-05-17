@@ -23,7 +23,7 @@ The server supports concurrent client connections, enabling it to handle multipl
 ## Running the Server
 To run the server, use the following command:
 ```
-go build -o ./build/http_server ./app && ./build/http_server
+make run
 ```
 The server will start listening on port 4221, ready to handle incoming HTTP requests as per the described functionalities.
 
