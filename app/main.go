@@ -10,6 +10,13 @@ import (
 	"strings"
 )
 
+type httpRequest struct {
+	method  string
+	path    string
+	headers map[string]string
+	body    string
+}
+
 func main() {
 	// Parse command line arguments
 	var dir string
@@ -49,67 +56,74 @@ func handleConn(conn net.Conn, dir string) {
 		fmt.Println("Error reading:", err.Error())
 		return
 	}
+	httpRequest := readRequest(n, conn)
+
+	switch httpRequest.method {
+	case "GET":
+		handleGetRequest(httpRequest, conn, dir)
+	case "POST":
+		handlePostRequest(httpRequest, conn, dir)
+	default:
+		responce := fmt.Sprintf("HTTP/1.1 405 Method Not Allowed\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("405 Method Not Allowed"), "405 Method Not Allowed")
+		conn.Write([]byte(responce))
+	}
+}
+
+func readRequest(n int, conn net.Conn) httpRequest {
+	buff := make([]byte, 1024)
+	n, err := conn.Read(buff[:n])
+	if err != nil {
+		fmt.Println("Error reading:", err.Error())
+		return httpRequest{}
+	}
 	req := string(buff[:n])
 	lines := strings.Split(req, "\r\n")
 	reqLine := strings.Split(lines[0], " ")
 	method := reqLine[0]
 	path := reqLine[1]
-	userAgent := "User-Agent not found"
-	encodingMethods := "Accept-Encoding not found"
-	for _, line := range lines {
-		if strings.HasPrefix(line, "Accept-Encoding:") {
-			encodingMethods = strings.TrimPrefix(line, "Accept-Encoding: ")
-		}
-
-		if strings.HasPrefix(line, "User-Agent:") {
-			userAgent = strings.TrimSpace(strings.TrimPrefix(line, "User-Agent:"))
-		}
+	headers := make(map[string]string)
+	for _, line := range lines[1:] {
+		header := strings.Split(line, ": ")
+		headers[header[0]] = header[1]
 	}
-	listOfEncodingMethods := strings.Split(encodingMethods, ", ")
 	body := lines[len(lines)-1]
+	return httpRequest{method, path, headers, body}
+}
 
-	// Write to the connection
-	if method == "GET" {
-		if strings.HasPrefix(path, "/files") {
-			serveFile(conn, path, dir)
-		} else if strings.HasPrefix(path, "/echo") {
-			ifGzip := false
-			for _, encodingMethod := range listOfEncodingMethods {
-				if encodingMethod == "gzip" {
-					ifGzip = true
-					break
-				}
-			}
-			if ifGzip {
-				message := strings.TrimPrefix(path, "/echo/")
-				encodedMessage := gzipString(message)
-				responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(encodedMessage), encodedMessage)
-				fmt.Println(responce)
-				conn.Write([]byte(responce))
-			} else {
-				message := strings.TrimPrefix(path, "/echo/")
-				responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
-				conn.Write([]byte(responce))
-			}
-		} else if path == "/user-agent" {
-			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(userAgent), userAgent)
-			conn.Write([]byte(responce))
-		} else if path == "/" {
-			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("Hello World"), "Hello World")
+func handleGetRequest(httpRequest httpRequest, conn net.Conn, dir string) {
+	if strings.HasPrefix(httpRequest.path, "/files") {
+		serveFile(conn, httpRequest.path, dir)
+	} else if strings.HasPrefix(httpRequest.path, "/echo") {
+		if httpRequest.headers["Accept-Encoding"] == "gzip" {
+			message := strings.TrimPrefix(httpRequest.path, "/echo/")
+			encodedMessage := gzipString(message)
+			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(encodedMessage), encodedMessage)
+			fmt.Println(responce)
 			conn.Write([]byte(responce))
 		} else {
-			responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
+			message := strings.TrimPrefix(httpRequest.path, "/echo/")
+			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
 			conn.Write([]byte(responce))
 		}
-	} else if method == "POST" {
-		if strings.HasPrefix(path, "/files") {
-			saveFile(conn, path, dir, body)
-		} else {
-			responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
-			conn.Write([]byte(responce))
-		}
+	} else if httpRequest.path == "/user-agent" {
+		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(httpRequest.headers["User-Agent"]), httpRequest.headers["User-Agent"])
+		conn.Write([]byte(responce))
+	} else if httpRequest.path == "/" {
+		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("Hello World"), "Hello World")
+		conn.Write([]byte(responce))
+	} else {
+		responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
+		conn.Write([]byte(responce))
 	}
+}
 
+func handlePostRequest(httpRequest httpRequest, conn net.Conn, dir string) {
+	if strings.HasPrefix(httpRequest.path, "/files") {
+		saveFile(conn, httpRequest.path, dir, httpRequest.body)
+	} else {
+		responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
+		conn.Write([]byte(responce))
+	}
 }
 
 func serveFile(conn net.Conn, path string, dir string) {
