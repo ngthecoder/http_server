@@ -1,12 +1,23 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
 func main() {
+	// Parse command line arguments
+	var dir string
+	flag.StringVar(&dir, "directory", "", "Directory to serve")
+	flag.Parse()
+	if dir != "" {
+		fmt.Println("Serving directory:", dir)
+	}
+
 	// Start a TCP server that listens on port 4221
 	l, err := net.Listen("tcp", ":4221")
 	if err != nil {
@@ -23,12 +34,11 @@ func main() {
 			fmt.Println("Error accepting:", err.Error())
 			return
 		}
-		go handleConn(conn)
-
+		go handleConn(conn, dir)
 	}
 }
 
-func handleConn(conn net.Conn) {
+func handleConn(conn net.Conn, dir string) {
 	defer conn.Close()
 
 	// Read from the connection
@@ -53,7 +63,9 @@ func handleConn(conn net.Conn) {
 
 	// Write to the connection
 	if method == "GET" {
-		if strings.HasPrefix(path, "/echo") {
+		if strings.HasPrefix(path, "/files") {
+			serveFile(conn, path, dir)
+		} else if strings.HasPrefix(path, "/echo") {
 			message := strings.TrimPrefix(path, "/echo/")
 			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
 			conn.Write([]byte(responce))
@@ -71,4 +83,24 @@ func handleConn(conn net.Conn) {
 		fmt.Println("POST request")
 	}
 
+}
+
+func serveFile(conn net.Conn, path string, dir string) {
+	fileName := strings.TrimPrefix(path, "/files")
+	filePath := filepath.Join(dir, fileName)
+	file, err := os.Open(filePath)
+	if err != nil {
+		responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
+		conn.Write([]byte(responce))
+		return
+	}
+	contents := make([]byte, 1024)
+	n, err := file.Read(contents)
+	if err != nil {
+		responce := fmt.Sprintf("HTTP/1.1 500 Internal Server Error\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("500 Internal Server Error"), "500 Internal Server Error")
+		conn.Write([]byte(responce))
+		return
+	}
+	responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", n, string(contents[:n]))
+	conn.Write([]byte(responce))
 }
