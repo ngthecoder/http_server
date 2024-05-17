@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"net"
@@ -53,12 +55,17 @@ func handleConn(conn net.Conn, dir string) {
 	method := reqLine[0]
 	path := reqLine[1]
 	userAgent := "User-Agent not found"
+	encodingMethods := "Accept-Encoding not found"
 	for _, line := range lines {
+		if strings.HasPrefix(line, "Accept-Encoding:") {
+			encodingMethods = strings.TrimPrefix(line, "Accept-Encoding: ")
+		}
+
 		if strings.HasPrefix(line, "User-Agent:") {
 			userAgent = strings.TrimSpace(strings.TrimPrefix(line, "User-Agent:"))
-			break
 		}
 	}
+	listOfEncodingMethods := strings.Split(encodingMethods, ", ")
 	body := lines[len(lines)-1]
 
 	// Write to the connection
@@ -66,9 +73,24 @@ func handleConn(conn net.Conn, dir string) {
 		if strings.HasPrefix(path, "/files") {
 			serveFile(conn, path, dir)
 		} else if strings.HasPrefix(path, "/echo") {
-			message := strings.TrimPrefix(path, "/echo/")
-			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
-			conn.Write([]byte(responce))
+			ifGzip := false
+			for _, encodingMethod := range listOfEncodingMethods {
+				if encodingMethod == "gzip" {
+					ifGzip = true
+					break
+				}
+			}
+			if ifGzip {
+				message := strings.TrimPrefix(path, "/echo/")
+				encodedMessage := gzipString(message)
+				responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(encodedMessage), encodedMessage)
+				fmt.Println(responce)
+				conn.Write([]byte(responce))
+			} else {
+				message := strings.TrimPrefix(path, "/echo/")
+				responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
+				conn.Write([]byte(responce))
+			}
 		} else if path == "/user-agent" {
 			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(userAgent), userAgent)
 			conn.Write([]byte(responce))
@@ -80,7 +102,12 @@ func handleConn(conn net.Conn, dir string) {
 			conn.Write([]byte(responce))
 		}
 	} else if method == "POST" {
-		saveFile(conn, path, dir, body)
+		if strings.HasPrefix(path, "/files") {
+			saveFile(conn, path, dir, body)
+		} else {
+			responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
+			conn.Write([]byte(responce))
+		}
 	}
 
 }
@@ -101,7 +128,7 @@ func serveFile(conn net.Conn, path string, dir string) {
 		conn.Write([]byte(responce))
 		return
 	}
-	responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", n, string(contents[:n]))
+	responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: application/octet-stream\r\n\r\n%s", n, string(contents[:n]))
 	conn.Write([]byte(responce))
 }
 
@@ -120,6 +147,18 @@ func saveFile(conn net.Conn, path string, dir string, body string) {
 		conn.Write([]byte(responce))
 		return
 	}
-	responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", n, "File saved")
+	responce := fmt.Sprintf("HTTP/1.1 201 Created\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", n, "File saved")
 	conn.Write([]byte(responce))
+}
+
+func gzipString(message string) string {
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+	if _, err := gz.Write([]byte(message)); err != nil {
+		return ""
+	}
+	if err := gz.Close(); err != nil {
+		return ""
+	}
+	return b.String()
 }
