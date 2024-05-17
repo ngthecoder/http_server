@@ -20,10 +20,13 @@ The /user-agent endpoint reads the User-Agent header from the client's request a
 ### Concurrent Connections
 The server supports concurrent client connections, enabling it to handle multiple requests simultaneously. This improves the server's performance and responsiveness under load.
 
+### Files Endpoint
+The /files/{filename} endpoint finds and returns up to 1014 bytes of the contents of the file in the responce body from the direcotry provided with --directory flag.
+
 ## Running the Server
 To run the server, use the following command:
 ```
-make run
+go build -o ./build/http_server ./app && ./build/http_server --directory <directory path>
 ```
 The server will start listening on port 4221, ready to handle incoming HTTP requests as per the described functionalities.
 
