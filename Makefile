@@ -11,4 +11,4 @@ build:
 
 run: build
 	@echo "Running the application..."
-	@$(BUILD_DIR)/$(BINARY_NAME)
+	@$(BUILD_DIR)/$(BINARY_NAME) --directory /Users/naokigoto/Downloads
