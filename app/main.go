@@ -18,7 +18,6 @@ type httpRequest struct {
 }
 
 func main() {
-	// Parse command line arguments
 	var dir string
 	flag.StringVar(&dir, "directory", "", "Directory to serve")
 	flag.Parse()
@@ -26,7 +25,6 @@ func main() {
 		fmt.Println("Serving directory:", dir)
 	}
 
-	// Start a TCP server that listens on port 4221
 	l, err := net.Listen("tcp", ":4221")
 	if err != nil {
 		fmt.Println("Error listening:", err.Error())
@@ -35,7 +33,6 @@ func main() {
 	defer l.Close()
 	fmt.Println("Listening on port 4221")
 
-	// Accept a connection and handle it
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -49,14 +46,11 @@ func main() {
 func handleConn(conn net.Conn, dir string) {
 	defer conn.Close()
 
-	// Read from the connection
-	buff := make([]byte, 1024)
-	n, err := conn.Read(buff)
+	httpRequest, err := readRequest(conn)
 	if err != nil {
-		fmt.Println("Error reading:", err.Error())
+		fmt.Println("Error reading request:", err.Error())
 		return
 	}
-	httpRequest := readRequest(n, conn)
 
 	switch httpRequest.method {
 	case "GET":
@@ -64,65 +58,67 @@ func handleConn(conn net.Conn, dir string) {
 	case "POST":
 		handlePostRequest(httpRequest, conn, dir)
 	default:
-		responce := fmt.Sprintf("HTTP/1.1 405 Method Not Allowed\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("405 Method Not Allowed"), "405 Method Not Allowed")
-		conn.Write([]byte(responce))
+		respondMethodNotAllowed(conn)
 	}
 }
 
-func readRequest(n int, conn net.Conn) httpRequest {
+func readRequest(conn net.Conn) (*httpRequest, error) {
 	buff := make([]byte, 1024)
-	n, err := conn.Read(buff[:n])
+	n, err := conn.Read(buff)
 	if err != nil {
-		fmt.Println("Error reading:", err.Error())
-		return httpRequest{}
+		return nil, err
 	}
+
 	req := string(buff[:n])
 	lines := strings.Split(req, "\r\n")
 	reqLine := strings.Split(lines[0], " ")
-	method := reqLine[0]
-	path := reqLine[1]
-	headers := make(map[string]string)
-	for _, line := range lines[1:] {
-		header := strings.Split(line, ": ")
-		headers[header[0]] = header[1]
-	}
+	headers := parseHeaders(lines[1:])
 	body := lines[len(lines)-1]
-	return httpRequest{method, path, headers, body}
+
+	return &httpRequest{
+		method:  reqLine[0],
+		path:    reqLine[1],
+		headers: headers,
+		body:    body,
+	}, nil
 }
 
-func handleGetRequest(httpRequest httpRequest, conn net.Conn, dir string) {
+func parseHeaders(headerLines []string) map[string]string {
+	headers := make(map[string]string)
+	for _, line := range headerLines {
+		if parts := strings.SplitN(line, ": ", 2); len(parts) == 2 {
+			headers[parts[0]] = parts[1]
+		}
+	}
+	return headers
+}
+
+func handleGetRequest(httpRequest *httpRequest, conn net.Conn, dir string) {
 	if strings.HasPrefix(httpRequest.path, "/files") {
 		serveFile(conn, httpRequest.path, dir)
 	} else if strings.HasPrefix(httpRequest.path, "/echo") {
 		if httpRequest.headers["Accept-Encoding"] == "gzip" {
 			message := strings.TrimPrefix(httpRequest.path, "/echo/")
 			encodedMessage := gzipString(message)
-			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(encodedMessage), encodedMessage)
-			fmt.Println(responce)
-			conn.Write([]byte(responce))
+			respondOK(conn, encodedMessage)
 		} else {
 			message := strings.TrimPrefix(httpRequest.path, "/echo/")
-			responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
-			conn.Write([]byte(responce))
+			respondOK(conn, message)
 		}
 	} else if httpRequest.path == "/user-agent" {
-		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(httpRequest.headers["User-Agent"]), httpRequest.headers["User-Agent"])
-		conn.Write([]byte(responce))
+		respondOK(conn, httpRequest.headers["User-Agent"])
 	} else if httpRequest.path == "/" {
-		responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("Hello World"), "Hello World")
-		conn.Write([]byte(responce))
+		respondOK(conn, "Hello, World!")
 	} else {
-		responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
-		conn.Write([]byte(responce))
+		respondNotFound(conn)
 	}
 }
 
-func handlePostRequest(httpRequest httpRequest, conn net.Conn, dir string) {
+func handlePostRequest(httpRequest *httpRequest, conn net.Conn, dir string) {
 	if strings.HasPrefix(httpRequest.path, "/files") {
 		saveFile(conn, httpRequest.path, dir, httpRequest.body)
 	} else {
-		responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
-		conn.Write([]byte(responce))
+		respondNotFound(conn)
 	}
 }
 
@@ -131,19 +127,16 @@ func serveFile(conn net.Conn, path string, dir string) {
 	filePath := fmt.Sprint(dir, fileName)
 	file, err := os.Open(filePath)
 	if err != nil {
-		responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
-		conn.Write([]byte(responce))
+		respondNotFound(conn)
 		return
 	}
 	contents := make([]byte, 1024)
 	n, err := file.Read(contents)
 	if err != nil {
-		responce := fmt.Sprintf("HTTP/1.1 500 Internal Server Error\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("500 Internal Server Error"), "500 Internal Server Error")
-		conn.Write([]byte(responce))
+		respondServerError(conn)
 		return
 	}
-	responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: application/octet-stream\r\n\r\n%s", n, string(contents[:n]))
-	conn.Write([]byte(responce))
+	respondOK(conn, string(contents[:n]))
 }
 
 func saveFile(conn net.Conn, path string, dir string, body string) {
@@ -151,18 +144,15 @@ func saveFile(conn net.Conn, path string, dir string, body string) {
 	filePath := fmt.Sprint(dir, fileName)
 	file, err := os.Create(filePath)
 	if err != nil {
-		responce := fmt.Sprintf("HTTP/1.1 500 Internal Server Error\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("500 Internal Server Error"), "500 Internal Server Error")
-		conn.Write([]byte(responce))
+		respondServerError(conn)
 		return
 	}
 	n, err := file.Write([]byte(body))
 	if err != nil {
-		responce := fmt.Sprintf("HTTP/1.1 500 Internal Server Error\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("500 Internal Server Error"), "500 Internal Server Error")
-		conn.Write([]byte(responce))
+		respondServerError(conn)
 		return
 	}
-	responce := fmt.Sprintf("HTTP/1.1 201 Created\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", n, "File saved")
-	conn.Write([]byte(responce))
+	respondCreated(conn, fmt.Sprintf("File %s created with %d bytes", fileName, n))
 }
 
 func gzipString(message string) string {
@@ -175,4 +165,29 @@ func gzipString(message string) string {
 		return ""
 	}
 	return b.String()
+}
+
+func respondOK(conn net.Conn, message string) {
+	responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
+	conn.Write([]byte(responce))
+}
+
+func respondCreated(conn net.Conn, message string) {
+	responce := fmt.Sprintf("HTTP/1.1 201 Created\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len(message), message)
+	conn.Write([]byte(responce))
+}
+
+func respondNotFound(conn net.Conn) {
+	responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
+	conn.Write([]byte(responce))
+}
+
+func respondMethodNotAllowed(conn net.Conn) {
+	responce := fmt.Sprintf("HTTP/1.1 405 Method Not Allowed\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("405 Method Not Allowed"), "405 Method Not Allowed")
+	conn.Write([]byte(responce))
+}
+
+func respondServerError(conn net.Conn) {
+	responce := fmt.Sprintf("HTTP/1.1 500 Internal Server Error\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("500 Internal Server Error"), "500 Internal Server Error")
+	conn.Write([]byte(responce))
 }
