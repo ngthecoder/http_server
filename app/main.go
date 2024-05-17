@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -60,6 +59,7 @@ func handleConn(conn net.Conn, dir string) {
 			break
 		}
 	}
+	body := lines[len(lines)-1]
 
 	// Write to the connection
 	if method == "GET" {
@@ -80,14 +80,14 @@ func handleConn(conn net.Conn, dir string) {
 			conn.Write([]byte(responce))
 		}
 	} else if method == "POST" {
-		fmt.Println("POST request")
+		saveFile(conn, path, dir, body)
 	}
 
 }
 
 func serveFile(conn net.Conn, path string, dir string) {
 	fileName := strings.TrimPrefix(path, "/files")
-	filePath := filepath.Join(dir, fileName)
+	filePath := fmt.Sprint(dir, fileName)
 	file, err := os.Open(filePath)
 	if err != nil {
 		responce := fmt.Sprintf("HTTP/1.1 404 Not Found\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("404 Not Found"), "404 Not Found")
@@ -102,5 +102,24 @@ func serveFile(conn net.Conn, path string, dir string) {
 		return
 	}
 	responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", n, string(contents[:n]))
+	conn.Write([]byte(responce))
+}
+
+func saveFile(conn net.Conn, path string, dir string, body string) {
+	fileName := strings.TrimPrefix(path, "/files")
+	filePath := fmt.Sprint(dir, fileName)
+	file, err := os.Create(filePath)
+	if err != nil {
+		responce := fmt.Sprintf("HTTP/1.1 500 Internal Server Error\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("500 Internal Server Error"), "500 Internal Server Error")
+		conn.Write([]byte(responce))
+		return
+	}
+	n, err := file.Write([]byte(body))
+	if err != nil {
+		responce := fmt.Sprintf("HTTP/1.1 500 Internal Server Error\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", len("500 Internal Server Error"), "500 Internal Server Error")
+		conn.Write([]byte(responce))
+		return
+	}
+	responce := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/plain\r\n\r\n%s", n, "File saved")
 	conn.Write([]byte(responce))
 }
