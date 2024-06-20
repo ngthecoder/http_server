@@ -1,10 +1,12 @@
-package main
+package internal
 
 import (
 	"fmt"
 	"net"
 	"os"
 	"strings"
+
+	responces "github.com/ngthecoder/http_server/internal/responces"
 )
 
 func serveFile(conn net.Conn, path string, dir string) {
@@ -12,16 +14,16 @@ func serveFile(conn net.Conn, path string, dir string) {
 	filePath := fmt.Sprint(dir, fileName)
 	file, err := os.Open(filePath)
 	if err != nil {
-		respondNotFound(conn)
+		responces.RespondNotFound(conn)
 		return
 	}
 	contents := make([]byte, 1024)
 	n, err := file.Read(contents)
 	if err != nil {
-		respondServerError(conn)
+		responces.RespondServerError(conn)
 		return
 	}
-	respondOK(conn, string(contents[:n]))
+	responces.RespondOK(conn, string(contents[:n]))
 }
 
 func saveFile(conn net.Conn, path string, dir string, body string) {
@@ -29,13 +31,13 @@ func saveFile(conn net.Conn, path string, dir string, body string) {
 	filePath := fmt.Sprint(dir, fileName)
 	file, err := os.Create(filePath)
 	if err != nil {
-		respondServerError(conn)
+		responces.RespondServerError(conn)
 		return
 	}
 	n, err := file.Write([]byte(body))
 	if err != nil {
-		respondServerError(conn)
+		responces.RespondServerError(conn)
 		return
 	}
-	respondCreated(conn, fmt.Sprintf("File %s created with %d bytes", fileName, n))
+	responces.RespondCreated(conn, fmt.Sprintf("File %s created with %d bytes", fileName, n))
 }

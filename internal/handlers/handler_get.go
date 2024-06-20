@@ -1,8 +1,11 @@
-package main
+package internal
 
 import (
 	"net"
 	"strings"
+
+	middleware "github.com/ngthecoder/http_server/internal/middleware"
+	responces "github.com/ngthecoder/http_server/internal/responces"
 )
 
 func handleGetRequest(httpRequest *httpRequest, conn net.Conn, dir string) {
@@ -11,17 +14,17 @@ func handleGetRequest(httpRequest *httpRequest, conn net.Conn, dir string) {
 	} else if strings.HasPrefix(httpRequest.path, "/echo") {
 		if httpRequest.headers["Accept-Encoding"] == "gzip" {
 			message := strings.TrimPrefix(httpRequest.path, "/echo/")
-			encodedMessage := gzipString(message)
-			respondOK(conn, encodedMessage)
+			encodedMessage := middleware.GzipString(message)
+			responces.RespondOK(conn, encodedMessage)
 		} else {
 			message := strings.TrimPrefix(httpRequest.path, "/echo/")
-			respondOK(conn, message)
+			responces.RespondOK(conn, message)
 		}
 	} else if httpRequest.path == "/user-agent" {
-		respondOK(conn, httpRequest.headers["User-Agent"])
+		responces.RespondOK(conn, httpRequest.headers["User-Agent"])
 	} else if httpRequest.path == "/" {
-		respondOK(conn, "Hello, World!")
+		responces.RespondOK(conn, "Hello, World!")
 	} else {
-		respondNotFound(conn)
+		responces.RespondNotFound(conn)
 	}
 }

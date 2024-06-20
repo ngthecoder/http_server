@@ -4,14 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"net"
-)
 
-type httpRequest struct {
-	method  string
-	path    string
-	headers map[string]string
-	body    string
-}
+	internal "github.com/ngthecoder/http_server/internal/handlers"
+)
 
 func main() {
 	var dir string
@@ -35,6 +30,6 @@ func main() {
 			fmt.Println("Error accepting:", err.Error())
 			return
 		}
-		go handleConn(conn, dir)
+		go internal.HandleConn(conn, dir)
 	}
 }

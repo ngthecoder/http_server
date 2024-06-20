@@ -1,12 +1,21 @@
-package main
+package internal
 
 import (
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/ngthecoder/http_server/internal/responces"
 )
 
-func handleConn(conn net.Conn, dir string) {
+type httpRequest struct {
+	method  string
+	path    string
+	headers map[string]string
+	body    string
+}
+
+func HandleConn(conn net.Conn, dir string) {
 	defer conn.Close()
 
 	httpRequest, err := readRequest(conn)
@@ -21,7 +30,7 @@ func handleConn(conn net.Conn, dir string) {
 	case "POST":
 		handlePostRequest(httpRequest, conn, dir)
 	default:
-		respondMethodNotAllowed(conn)
+		responces.RespondMethodNotAllowed(conn)
 	}
 }
 

@@ -1,11 +1,11 @@
-package main
+package middleware
 
 import (
 	"bytes"
 	"compress/gzip"
 )
 
-func gzipString(message string) string {
+func GzipString(message string) string {
 	var b bytes.Buffer
 	gz := gzip.NewWriter(&b)
 	if _, err := gz.Write([]byte(message)); err != nil {
