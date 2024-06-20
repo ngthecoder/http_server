@@ -4,13 +4,13 @@ import (
 	"net"
 	"strings"
 
-	"github.com/ngthecoder/http_server/internal/responces"
+	responce "github.com/ngthecoder/http_server/internal/responce"
 )
 
 func handlePostRequest(httpRequest *httpRequest, conn net.Conn, dir string) {
 	if strings.HasPrefix(httpRequest.path, "/files") {
 		saveFile(conn, httpRequest.path, dir, httpRequest.body)
 	} else {
-		responces.RespondNotFound(conn)
+		responce.Respond(conn, 404, "Not Found")
 	}
 }

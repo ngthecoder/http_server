@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/ngthecoder/http_server/internal/responces"
+	responce "github.com/ngthecoder/http_server/internal/responce"
 )
 
 type httpRequest struct {
@@ -30,7 +30,7 @@ func HandleConn(conn net.Conn, dir string) {
 	case "POST":
 		handlePostRequest(httpRequest, conn, dir)
 	default:
-		responces.RespondMethodNotAllowed(conn)
+		responce.Respond(conn, 405, "Method Not Allowed")
 	}
 }
 
