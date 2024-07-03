@@ -7,5 +7,4 @@ FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /src/http_server .
 ENV DIRECTORY_PATH=/data
-EXPOSE 3000
 ENTRYPOINT ["/app/http_server"]
