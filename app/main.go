@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 
 	internal "github.com/ngthecoder/http_server/internal/handlers"
 )
@@ -12,6 +13,9 @@ func main() {
 	var dir string
 	flag.StringVar(&dir, "directory", "", "Directory to serve")
 	flag.Parse()
+	if dir == "" {
+		dir = os.Getenv("DIRECTORY_PATH")
+	}
 	if dir != "" {
 		fmt.Println("Serving directory:", dir)
 	}
