@@ -37,5 +37,52 @@ go build -o ./build/http_server ./app && ./build/http_server --directory <direct
 ```
 The server will start listening on port 4221, ready to handle incoming HTTP requests as per the described functionalities.
 
+## Docker
+This application can be run using Docker. Follow these steps to build and run the container:
+
+### Prerequisites
+- Docker installed on your system. [Get Docker](https://docs.docker.com/get-docker/)
+
+### Building the Docker Image
+1. Clone this repository and navigate to the project directory:
+```
+git clone https://github.com/ngthecoder/http_server.git
+cd http_server
+```
+2. Build the Docker image:
+```
+docker build -t http-server:latest .
+```
+
+### Running the Container
+Run the container with the following command:
+```
+docker run -p 4221:4221 -v /path/on/host:/data http-server:latest --directory /data
+```
+Replace `/path/on/host` with the directory on your machine where you want to store/access files.
+
+This command:
+- Maps port 4221 in the container to port 4221 on your host
+- Mounts a directory from your host to `/data` in the container
+- Passes the `--directory /data` argument to the application
+
+### Accessing the Application
+Once the container is running, you can access the application at `http://localhost:4221`.
+
+### Stopping the Container
+To stop the running container:
+1. Find the container ID:
+```
+docker ps
+```
+2. Stop the container:
+```
+docker stop {container-id}
+```
+
+### Notes
+- Ensure the port 4221 is not in use on your host machine, or change the port mapping in the `docker run` command (e.g., `-p 8080:4221` to use port 8080 on the host).
+- The application inside the container uses `/data` as its working directory. Files created or modified by the application will be stored in the directory you mount to `/data`.
+
 ## Conclusion
 This Go-based HTTP server demonstrates fundamental concepts of HTTP request handling, including basic responses, path processing, echoing messages, reading headers, and supporting concurrent connections. It serves as a foundational example for building more complex and feature-rich HTTP servers.
